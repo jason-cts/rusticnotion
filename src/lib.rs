@@ -1,5 +1,6 @@
 use crate::ids::{BlockId, DatabaseId};
 use crate::models::error::ErrorResponse;
+use crate::models::paging::{Pageable, Paging, PagingCursor};
 use crate::models::search::{DatabaseQuery, SearchRequest};
 use crate::models::{Database, ListResponse, Object, Page};
 use ids::{AsIdentifier, PageId};
@@ -8,6 +9,9 @@ use models::search::NotionSearch;
 use models::PageCreateRequest;
 use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, ClientBuilder, RequestBuilder};
+use std::boxed::Box;
+use std::option::Option;
+use std::rc::Rc;
 use tracing::Instrument;
 
 pub mod ids;
@@ -226,14 +230,75 @@ impl NotionApi {
         }
     }
 
-    pub async fn get_block_children<T: AsIdentifier<BlockId>>(
+    pub async fn get_block<T>(
         &self,
         block_id: T,
-    ) -> Result<ListResponse<Block>, Error> {
+    ) -> Result<Block, Error>
+    where
+        T: AsIdentifier<BlockId>,
+    {
         let result = self
             .make_json_request(self.client.get(&format!(
-                "https://api.notion.com/v1/blocks/{block_id}/children",
-                block_id = block_id.as_id()
+                "https://api.notion.com/v1/blocks/{block_id}",
+                block_id = block_id.as_id(),
+            )))
+            .await?;
+
+        match result {
+            Object::Block { block } => {
+                if block.common().has_children {
+                    let children = &mut Vec::new();
+                    let mut cursor: Option<PagingCursor> = None;
+                    loop {
+                        match self.get_block_children(block.as_id(), cursor).await {
+                            Ok(ListResponse {
+                                results,
+                                next_cursor,
+                                has_more,
+                            }) => {
+                                // Recursively fetch block children
+                                for it in results {
+                                    children
+                                        .push(Box::pin(self.get_block(it.as_id())).await.unwrap());
+                                }
+
+                                cursor = next_cursor;
+
+                                if !has_more {
+                                    break;
+                                }
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    let block = &mut block.to_owned();
+                    block.set_children(children.to_vec());
+                    return Ok(block.to_owned());
+                } else {
+                    return Ok(block);
+                }
+            }
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    pub async fn get_block_children<T>(
+        &self,
+        block_id: T,
+        cursor: Option<PagingCursor>,
+    ) -> Result<ListResponse<Block>, Error>
+    where
+        T: AsIdentifier<BlockId>,
+    {
+        let result = self
+            .make_json_request(self.client.get(&format!(
+                "https://api.notion.com/v1/blocks/{block_id}/children{cursor}",
+                block_id = block_id.as_id(),
+                cursor = if let Some(id) = cursor {
+                    format!("?start_cursor={}", id.0)
+                } else {
+                    "".to_string()
+                }
             )))
             .await?;
 
