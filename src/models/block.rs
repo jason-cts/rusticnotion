@@ -5,7 +5,6 @@ use crate::ids::{AsIdentifier, BlockId, DatabaseId, PageId};
 use crate::models::text::{RichText, TextColor};
 use crate::models::users::UserCommon;
 use std::boxed::Box;
-use std::rc::Rc;
 
 #[cfg(test)]
 mod tests;
@@ -24,6 +23,7 @@ pub struct BlockCommon {
 pub struct TextAndChildren {
     pub rich_text: Vec<RichText>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
     pub color: TextColor,
 }
@@ -69,6 +69,17 @@ pub enum FileObject {
     External { external: ExternalFileObject },
 }
 
+/// A file block's source and metadata, all nested under the block's `file` key.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct FileFields {
+    #[serde(flatten)]
+    pub source: FileObject,
+    #[serde(default)]
+    pub caption: Vec<RichText>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct Callout {
     pub rich_text: Vec<RichText>,
@@ -81,6 +92,7 @@ pub struct ToDoFields {
     pub rich_text: Vec<RichText>,
     pub checked: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
     pub color: TextColor,
 }
@@ -210,11 +222,13 @@ pub struct TableOfContents {
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ColumnListFields {
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct ColumnFields {
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
 }
 
@@ -226,6 +240,7 @@ pub struct LinkPreviewFields {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct TemplateFields {
     pub rich_text: Vec<RichText>,
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
 }
 
@@ -245,6 +260,7 @@ pub struct SyncedFromObject {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct SyncedBlockFields {
     pub synced_from: Option<SyncedFromObject>,
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
 }
 
@@ -253,12 +269,13 @@ pub struct TableFields {
     pub table_width: u64,
     pub has_column_header: bool,
     pub has_row_header: bool,
+    #[serde(default)]
     pub children: Vec<Box<Block>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct TableRowFields {
-    pub cells: Vec<RichText>,
+    pub cells: Vec<Vec<RichText>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
@@ -351,8 +368,7 @@ pub enum Block {
     File {
         #[serde(flatten)]
         common: BlockCommon,
-        file: FileObject,
-        caption: Text,
+        file: FileFields,
     },
     Pdf {
         #[serde(flatten)]
@@ -581,7 +597,7 @@ impl From<Block> for CreateBlock {
             Block::Embed { embed, .. } => CreateBlock::Embed { embed },
             Block::Image { image, .. } => CreateBlock::Image { image },
             Block::Video { video, .. } => CreateBlock::Video { video },
-            Block::File { file, caption, .. } => CreateBlock::File { file, caption },
+            Block::File { file, .. } => CreateBlock::File { file },
             Block::Pdf { pdf, .. } => CreateBlock::Pdf { pdf },
             Block::Bookmark { bookmark, .. } => CreateBlock::Bookmark { bookmark },
             Block::Equation { equation, .. } => CreateBlock::Equation { equation },
@@ -661,8 +677,7 @@ pub enum CreateBlock {
         video: FileObject,
     },
     File {
-        file: FileObject,
-        caption: Text,
+        file: FileFields,
     },
     Pdf {
         pdf: FileObject,

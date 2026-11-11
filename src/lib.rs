@@ -1,6 +1,6 @@
 use crate::ids::{BlockId, DatabaseId};
 use crate::models::error::ErrorResponse;
-use crate::models::paging::{Pageable, Paging, PagingCursor};
+use crate::models::paging::PagingCursor;
 use crate::models::search::{DatabaseQuery, SearchRequest};
 use crate::models::{Database, ListResponse, Object, Page};
 use ids::{AsIdentifier, PageId};
@@ -11,7 +11,6 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{header, Client, ClientBuilder, RequestBuilder};
 use std::boxed::Box;
 use std::option::Option;
-use std::rc::Rc;
 use tracing::Instrument;
 
 pub mod ids;
@@ -19,11 +18,14 @@ pub mod models;
 
 pub use chrono;
 
-const NOTION_API_VERSION: &str = "2022-02-22";
+pub const NOTION_API_VERSION: &str = "2022-06-28";
 
 /// An wrapper Error type for all errors produced by the [`NotionApi`](NotionApi) client.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Rate limited; wait {retry_after_secs} seconds before trying again")]
+    RateLimited { retry_after_secs: u64 },
+
     #[error("Invalid Notion API Token: {}", source)]
     InvalidApiToken { source: header::InvalidHeaderValue },
 
@@ -54,12 +56,22 @@ pub enum Error {
 #[derive(Clone)]
 pub struct NotionApi {
     client: Client,
+    base_url: String,
 }
 
 impl NotionApi {
     /// Creates an instance of NotionApi.
     /// May fail if the provided api_token is an improper value.
     pub fn new(api_token: String) -> Result<Self, Error> {
+        Self::with_base_url(api_token, "https://api.notion.com/v1")
+    }
+
+    /// Creates a client with an alternative API root (for proxies and local tests).
+    /// Only use a trusted endpoint: requests carry the integration token.
+    pub fn with_base_url(
+        api_token: String,
+        base_url: impl Into<String>,
+    ) -> Result<Self, Error> {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Notion-Version",
@@ -73,10 +85,14 @@ impl NotionApi {
 
         let client = ClientBuilder::new()
             .default_headers(headers)
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|source| Error::ErrorBuildingClient { source })?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+        })
     }
 
     async fn make_json_request(
@@ -90,12 +106,22 @@ impl NotionApi {
             url = url.as_str(),
             "Sending request"
         );
-        let json = self
+        let response = self
             .client
             .execute(request)
             .instrument(tracing::trace_span!("Sending request"))
             .await
-            .map_err(|source| Error::RequestFailed { source })?
+            .map_err(|source| Error::RequestFailed { source })?;
+        if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let retry_after_secs = response
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1);
+            return Err(Error::RateLimited { retry_after_secs });
+        }
+        let json = response
             .text()
             .instrument(tracing::trace_span!("Reading response"))
             .await
@@ -138,7 +164,7 @@ impl NotionApi {
         let result = self
             .make_json_request(
                 self.client
-                    .post("https://api.notion.com/v1/search")
+                    .post(format!("{}/search", self.base_url))
                     .json(&query.into()),
             )
             .await?;
@@ -156,7 +182,8 @@ impl NotionApi {
     ) -> Result<Database, Error> {
         let result = self
             .make_json_request(self.client.get(format!(
-                "https://api.notion.com/v1/databases/{}",
+                "{}/databases/{}",
+                self.base_url,
                 database_id.as_id()
             )))
             .await?;
@@ -174,7 +201,8 @@ impl NotionApi {
     ) -> Result<Page, Error> {
         let result = self
             .make_json_request(self.client.get(format!(
-                "https://api.notion.com/v1/pages/{}",
+                "{}/pages/{}",
+                self.base_url,
                 page_id.as_id()
             )))
             .await?;
@@ -193,7 +221,7 @@ impl NotionApi {
         let result = self
             .make_json_request(
                 self.client
-                    .post("https://api.notion.com/v1/pages")
+                    .post(format!("{}/pages", self.base_url))
                     .json(&page.into()),
             )
             .await?;
@@ -218,7 +246,8 @@ impl NotionApi {
             .make_json_request(
                 self.client
                     .post(&format!(
-                        "https://api.notion.com/v1/databases/{database_id}/query",
+                        "{}/databases/{database_id}/query",
+                        self.base_url,
                         database_id = database.as_id()
                     ))
                     .json(&query.into()),
@@ -230,56 +259,55 @@ impl NotionApi {
         }
     }
 
-    pub async fn get_block<T>(
+    /// Retrieves one block without loading descendants.
+    pub async fn get_block_shallow<T: AsIdentifier<BlockId>>(
         &self,
         block_id: T,
-    ) -> Result<Block, Error>
-    where
-        T: AsIdentifier<BlockId>,
-    {
+    ) -> Result<Block, Error> {
         let result = self
-            .make_json_request(self.client.get(&format!(
-                "https://api.notion.com/v1/blocks/{block_id}",
-                block_id = block_id.as_id(),
+            .make_json_request(self.client.get(format!(
+                "{}/blocks/{}",
+                self.base_url,
+                block_id.as_id()
             )))
             .await?;
-
         match result {
-            Object::Block { block } => {
-                if block.common().has_children {
-                    let children = &mut Vec::new();
-                    let mut cursor: Option<PagingCursor> = None;
-                    loop {
-                        match self.get_block_children(block.as_id(), cursor).await {
-                            Ok(ListResponse {
-                                results,
-                                next_cursor,
-                                has_more,
-                            }) => {
-                                // Recursively fetch block children
-                                for it in results {
-                                    children
-                                        .push(Box::pin(self.get_block(it.as_id())).await.unwrap());
-                                }
-
-                                cursor = next_cursor;
-
-                                if !has_more {
-                                    break;
-                                }
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-                    let block = &mut block.to_owned();
-                    block.set_children(children.to_vec());
-                    return Ok(block.to_owned());
-                } else {
-                    return Ok(block);
-                }
-            }
+            Object::Block { block } => Ok(block),
             response => Err(Error::UnexpectedResponse { response }),
         }
+    }
+
+    pub async fn get_block<T: AsIdentifier<BlockId>>(
+        &self,
+        block_id: T,
+    ) -> Result<Block, Error> {
+        let mut block = self.get_block_shallow(block_id).await?;
+        if matches!(block, Block::Unknown) || !block.common().has_children {
+            return Ok(block);
+        }
+        let mut children = Vec::new();
+        let mut cursor = None;
+        loop {
+            let response = self.get_block_children(&block.common().id, cursor).await?;
+            for child in response.results {
+                if matches!(child, Block::Unknown) {
+                    children.push(Box::new(child));
+                } else {
+                    children.push(Box::new(
+                        Box::pin(self.get_block(&child.common().id)).await?,
+                    ));
+                }
+            }
+            if !response.has_more {
+                break;
+            }
+            cursor = response.next_cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        block.set_children(children);
+        Ok(block)
     }
 
     pub async fn get_block_children<T>(
@@ -290,17 +318,15 @@ impl NotionApi {
     where
         T: AsIdentifier<BlockId>,
     {
-        let result = self
-            .make_json_request(self.client.get(&format!(
-                "https://api.notion.com/v1/blocks/{block_id}/children{cursor}",
-                block_id = block_id.as_id(),
-                cursor = if let Some(id) = cursor {
-                    format!("?start_cursor={}", id.0)
-                } else {
-                    "".to_string()
-                }
-            )))
-            .await?;
+        let mut request = self.client.get(format!(
+            "{}/blocks/{}/children",
+            self.base_url,
+            block_id.as_id()
+        ));
+        if let Some(cursor) = cursor {
+            request = request.query(&[("start_cursor", cursor.0)]);
+        }
+        let result = self.make_json_request(request).await?;
 
         match result {
             Object::List { list } => Ok(list.expect_blocks()?),
@@ -308,3 +334,6 @@ impl NotionApi {
         }
     }
 }
+
+#[cfg(test)]
+mod compatibility_tests;

@@ -259,6 +259,9 @@ pub enum PropertyConfiguration {
     Button {
         id: PropertyId,
     },
+    Verification {
+        id: PropertyId,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
@@ -282,6 +285,15 @@ pub struct DateValue {
     pub start: DateOrDateTime,
     pub end: Option<DateOrDateTime>,
     pub time_zone: Option<String>,
+}
+
+/// Verification metadata returned for pages in wiki databases.
+/// See <https://developers.notion.com/reference/page-property-values#verification>.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct VerificationValue {
+    pub state: String,
+    pub date: Option<DateValue>,
+    pub verified_by: Option<User>,
 }
 
 /// Formula property value objects represent the result of evaluating a formula
@@ -440,6 +452,10 @@ pub enum PropertyValue {
     },
     Button {
         id: PropertyId,
+    },
+    Verification {
+        id: PropertyId,
+        verification: Option<VerificationValue>,
     },
 }
 

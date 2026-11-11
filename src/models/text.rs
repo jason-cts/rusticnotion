@@ -1,6 +1,6 @@
+use crate::ids::{DatabaseId, PageId};
 use crate::models::properties::DateValue;
 use crate::models::users::User;
-use crate::{Database, Page};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -64,6 +64,18 @@ pub struct Text {
     pub link: Option<Link>,
 }
 
+/// Page mentions contain an ID reference, not a full page response.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct PageMention {
+    pub id: PageId,
+}
+
+/// Database mentions contain an ID reference, not a full database response.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct DatabaseMention {
+    pub id: DatabaseId,
+}
+
 /// See https://developers.notion.com/reference/rich-text#mention-objects
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 #[serde(tag = "type")]
@@ -74,11 +86,11 @@ pub enum MentionObject {
     },
     // TODO: need to add tests
     Page {
-        page: Page,
+        page: PageMention,
     },
     // TODO: need to add tests
     Database {
-        database: Database,
+        database: DatabaseMention,
     },
     Date {
         date: DateValue,

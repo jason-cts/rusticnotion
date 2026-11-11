@@ -13,7 +13,7 @@ use block::FileOrEmojiObject;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::ids::{AsIdentifier, DatabaseId, PageId};
+use crate::ids::{AsIdentifier, BlockId, DatabaseId, PageId};
 use crate::models::block::{Block, CreateBlock};
 use crate::models::error::ErrorResponse;
 use crate::models::paging::PagingCursor;
@@ -144,6 +144,10 @@ pub enum Parent {
     #[serde(rename = "page_id")]
     Page {
         page_id: PageId,
+    },
+    #[serde(rename = "block_id")]
+    Block {
+        block_id: BlockId,
     },
     Workspace,
 }

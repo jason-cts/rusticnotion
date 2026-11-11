@@ -56,6 +56,36 @@ pub struct SearchRequest {
     paging: Option<Paging>,
 }
 
+impl SearchRequest {
+    /// Limits results to pages, optionally matching a page title.
+    pub fn pages(query: impl Into<String>) -> Self {
+        let query = query.into();
+        Self {
+            query: if query.is_empty() { None } else { Some(query) },
+            filter: Some(Filter {
+                property: FilterProperty::Object,
+                value: FilterValue::Page,
+            }),
+            ..Default::default()
+        }
+    }
+}
+
+impl Pageable for SearchRequest {
+    fn start_from(
+        self,
+        start_cursor: Option<PagingCursor>,
+    ) -> Self {
+        Self {
+            paging: Some(Paging {
+                start_cursor,
+                page_size: self.paging.and_then(|p| p.page_size),
+            }),
+            ..self
+        }
+    }
+}
+
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum TextCondition {
