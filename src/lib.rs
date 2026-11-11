@@ -18,6 +18,7 @@ use tracing::Instrument;
 
 pub mod ids;
 pub mod models;
+mod views;
 
 pub use chrono;
 

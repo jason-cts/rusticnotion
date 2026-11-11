@@ -59,6 +59,8 @@ macro_rules! identifer {
     };
 }
 
+identifer!(ViewId);
+identifer!(ViewQueryId);
 identifer!(DatabaseId);
 identifer!(DataSourceId);
 identifer!(PageId);

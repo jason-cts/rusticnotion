@@ -408,6 +408,27 @@ cargo test --lib
 
 ```
 
+## Saved database views
+
+The read APIs support saved list, table, board, and other database views on the
+configured Notion API version. Use `list_views(database_id, Paging)` to discover
+view IDs, then `get_view(view_id)` for each view's name, data source, saved filter,
+sorts, property visibility, and grouping configuration. Listing returns identity
+references rather than complete view definitions.
+
+`create_view_query(view_id, Some(100))` executes the saved filter and sorts and
+returns the first result page plus a query ID. Continue with
+`get_view_query_results(view_id, query_id, Paging)` while `has_more` is true, then
+call `delete_view_query(view_id, query_id)` to release the temporary cache. This
+deletes the query cache only, not the saved view or its pages. Queries expire;
+consumers should restart an expired snapshot rather than combine snapshots.
+
+View results preserve raw properties and accept ID-only pages. Fetch partial
+pages with `get_page` and complete truncated property values with
+`get_page_property`. `get_user` can resolve partial people references when the
+connection has the required user access. Unknown layouts and extra configuration
+fields survive decoding so consumers can handle future additions gracefully.
+
 ## Contributing
 
 Contributions are always welcome!

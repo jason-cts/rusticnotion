@@ -7,6 +7,7 @@ pub mod requests;
 pub mod search;
 pub mod text;
 pub mod users;
+pub mod view;
 
 use crate::models::properties::{PropertyConfiguration, PropertyValue};
 use crate::models::text::RichText;
