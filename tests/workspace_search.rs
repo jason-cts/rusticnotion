@@ -5,23 +5,23 @@ use rusticnotion::models::search::{FilterProperty, FilterValue, NotionSearch};
 use rusticnotion::models::Object;
 
 #[test(tokio::test)]
-async fn list_databases() -> Result<(), Box<dyn std::error::Error>> {
+async fn list_data_sources() -> Result<(), Box<dyn std::error::Error>> {
     let api = test_client();
 
-    let response = api.list_databases().await?;
+    let response = api.list_data_sources().await?;
     assert!(!response.results.is_empty());
 
     Ok(())
 }
 
 #[test(tokio::test)]
-async fn search_databases() -> Result<(), Box<dyn std::error::Error>> {
+async fn search_data_sources() -> Result<(), Box<dyn std::error::Error>> {
     let api = test_client();
 
     let response = api
         .search(NotionSearch::Filter {
             property: FilterProperty::Object,
-            value: FilterValue::Database,
+            value: FilterValue::DataSource,
         })
         .await?;
 
@@ -29,7 +29,7 @@ async fn search_databases() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response
         .results
         .iter()
-        .all(|object| matches!(object, Object::Database { .. })));
+        .all(|object| matches!(object, Object::DataSource { .. })));
 
     Ok(())
 }

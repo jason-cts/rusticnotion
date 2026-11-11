@@ -12,7 +12,7 @@
     "id": "e2507360-468c-4e0f-a928-7bbcbbb45353"
   },
   "has_children": true,
-  "archived": false,
+  "in_trash": false,
   "type": "callout",
   "callout": {
     "rich_text": [

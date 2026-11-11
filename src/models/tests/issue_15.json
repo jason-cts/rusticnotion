@@ -2,14 +2,17 @@
   "object": "list",
   "results": [
     {
-      "object": "database",
+      "object": "data_source",
       "id": "58be2827-5ca0-4cc4-85a8-ff656911df67",
       "created_time": "2021-03-07T19:20:00.000Z",
       "last_edited_time": "2021-07-11T22:04:00.000Z",
       "title": [
         {
           "type": "text",
-          "text": { "content": "Movie Collection", "link": null },
+          "text": {
+            "content": "Movie Collection",
+            "link": null
+          },
           "annotations": {
             "bold": false,
             "italic": false,
@@ -23,8 +26,16 @@
         }
       ],
       "properties": {
-        "Watched": { "id": "<dji", "type": "checkbox", "checkbox": {} },
-        "Cover": { "id": "VWBk", "type": "files", "files": {} },
+        "Watched": {
+          "id": "<dji",
+          "type": "checkbox",
+          "checkbox": {}
+        },
+        "Cover": {
+          "id": "VWBk",
+          "type": "files",
+          "files": {}
+        },
         "Type": {
           "id": "]iu{",
           "type": "select",
@@ -46,7 +57,9 @@
         "Year": {
           "id": "jwIv",
           "type": "number",
-          "number": { "format": "number" }
+          "number": {
+            "format": "number"
+          }
         },
         "Director": {
           "id": "~psh",
@@ -76,12 +89,21 @@
             ]
           }
         },
-        "Title": { "id": "title", "type": "title", "title": {} }
+        "Title": {
+          "id": "title",
+          "type": "title",
+          "title": {}
+        }
       },
       "parent": {
+        "type": "database_id",
+        "database_id": "53f17bf7-aad4-4760-a85e-b44b43d8201c"
+      },
+      "database_parent": {
         "type": "page_id",
         "page_id": "2ffcd525-17b1-4606-93ff-e367eade9e66"
-      }
+      },
+      "in_trash": false
     }
   ],
   "next_cursor": null,

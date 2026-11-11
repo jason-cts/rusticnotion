@@ -60,6 +60,7 @@ macro_rules! identifer {
 }
 
 identifer!(DatabaseId);
+identifer!(DataSourceId);
 identifer!(PageId);
 identifer!(BlockId);
 identifer!(UserId);

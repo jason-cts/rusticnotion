@@ -4,7 +4,7 @@ use common::test_client;
 use rusticnotion::models::{
     properties::PropertyConfiguration,
     search::{
-        DatabaseQuery, FilterCondition, FilterProperty, FilterValue, NotionSearch,
+        DataSourceQuery, FilterCondition, FilterProperty, FilterValue, NotionSearch,
         PropertyCondition, TextCondition,
     },
     Object,
@@ -16,7 +16,7 @@ async fn get_database() -> Result<(), Box<dyn std::error::Error>> {
 
     let response = api
         .search(NotionSearch::Filter {
-            value: FilterValue::Database,
+            value: FilterValue::DataSource,
             property: FilterProperty::Object,
         })
         .await?;
@@ -25,27 +25,35 @@ async fn get_database() -> Result<(), Box<dyn std::error::Error>> {
         .results()
         .iter()
         .filter_map(|o| match o {
-            Object::Database { database } => Some(database),
+            Object::DataSource { data_source } => Some(data_source),
             _ => None,
         })
         .next()
-        .expect("Test expected to find at least one database in notion")
+        .expect("Test expected to find at least one data source in notion")
         .clone();
 
-    let db_result = api.get_database(&db.id).await?;
-
-    assert_eq!(db, db_result);
+    let source = api.get_data_source(&db.id).await?;
+    assert_eq!(db, source);
+    let database_id = match &source.parent {
+        rusticnotion::models::Parent::Database { database_id } => database_id,
+        _ => panic!("Test expected a data source with a database parent"),
+    };
+    let database = api.get_database(database_id).await?;
+    assert!(database
+        .data_sources
+        .iter()
+        .any(|entry| entry.id == source.id));
 
     Ok(())
 }
 
 #[test(tokio::test)]
-async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
+async fn query_data_source() -> Result<(), Box<dyn std::error::Error>> {
     let api = test_client();
 
     let response = api
         .search(NotionSearch::Filter {
-            value: FilterValue::Database,
+            value: FilterValue::DataSource,
             property: FilterProperty::Object,
         })
         .await?;
@@ -54,11 +62,11 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
         .results()
         .iter()
         .filter_map(|o| match o {
-            Object::Database { database } => Some(database),
+            Object::DataSource { data_source } => Some(data_source),
             _ => None,
         })
         .next()
-        .expect("Test expected to find at least one database in notion")
+        .expect("Test expected to find at least one data source in notion")
         .clone();
 
     let title_property = db
@@ -70,7 +78,9 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
         })
         .expect("Test database must have a title property");
 
-    let all_pages = api.query_database(&db.id, DatabaseQuery::default()).await?;
+    let all_pages = api
+        .query_data_source(&db.id, DataSourceQuery::default())
+        .await?;
     let (page_id, title) = all_pages
         .results()
         .iter()
@@ -83,9 +93,9 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Test database must contain at least one page with a nonempty title");
 
     let pages = api
-        .query_database(
+        .query_data_source(
             &db.id,
-            DatabaseQuery {
+            DataSourceQuery {
                 filter: Some(FilterCondition::Property {
                     property: title_property.clone(),
                     condition: PropertyCondition::RichText(TextCondition::Contains(title.clone())),
@@ -104,9 +114,9 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let excluded_pages = api
-        .query_database(
+        .query_data_source(
             &db.id,
-            DatabaseQuery {
+            DataSourceQuery {
                 filter: Some(FilterCondition::Property {
                     property: title_property,
                     condition: PropertyCondition::RichText(TextCondition::DoesNotContain(

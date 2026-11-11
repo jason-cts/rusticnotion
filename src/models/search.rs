@@ -22,7 +22,7 @@ pub enum SortTimestamp {
 #[serde(rename_all = "snake_case")]
 pub enum FilterValue {
     Page,
-    Database,
+    DataSource,
 }
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -321,40 +321,40 @@ pub enum FilterCondition {
 
 #[derive(Serialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum DatabaseSortTimestamp {
+pub enum DataSourceSortTimestamp {
     CreatedTime,
     LastEditedTime,
 }
 
 #[derive(Serialize, Debug, Eq, PartialEq, Clone)]
-pub struct DatabaseSort {
+pub struct DataSourceSort {
     // Todo: Should property and timestamp be mutually exclusive? (i.e a flattened enum?)
     //  the documentation is not clear:
-    //  https://developers.notion.com/reference/post-database-query#post-database-query-sort
+    //  https://developers.notion.com/reference/sort-data-source-entries
     #[serde(skip_serializing_if = "Option::is_none")]
     pub property: Option<String>,
     /// The name of the timestamp to sort against.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub timestamp: Option<DatabaseSortTimestamp>,
+    pub timestamp: Option<DataSourceSortTimestamp>,
     pub direction: SortDirection,
 }
 
 #[derive(Serialize, Debug, Eq, PartialEq, Default, Clone)]
-pub struct DatabaseQuery {
+pub struct DataSourceQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub sorts: Option<Vec<DatabaseSort>>,
+    pub sorts: Option<Vec<DataSourceSort>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<FilterCondition>,
     #[serde(flatten)]
     pub paging: Option<Paging>,
 }
 
-impl Pageable for DatabaseQuery {
+impl Pageable for DataSourceQuery {
     fn start_from(
         self,
         starting_point: Option<PagingCursor>,
     ) -> Self {
-        DatabaseQuery {
+        DataSourceQuery {
             paging: Some(Paging {
                 start_cursor: starting_point,
                 page_size: self.paging.and_then(|p| p.page_size),
@@ -377,23 +377,23 @@ pub enum NotionSearch {
     },
     /// When supplied, filters the results based on the provided criteria.
     ///
-    /// Limitation: Currently the only filter allowed is `object` which will filter by type of object (either page or database)
+    /// Filters by object type (either page or data source).
     Filter {
         /// The name of the property to filter by.
         /// Currently the only property you can filter by is the `object` type.
         property: FilterProperty,
         /// The value of the property to filter the results by.
-        /// Possible values for object type include `page` or `database`.
+        /// Possible values for object type include `page` or `data_source`.
         value: FilterValue,
     },
 }
 
 impl NotionSearch {
-    /// Convenience function for building a filter for `Database`s
-    pub fn filter_by_databases() -> Self {
+    /// Convenience function for building a filter for data sources.
+    pub fn filter_by_data_sources() -> Self {
         Self::Filter {
             property: FilterProperty::Object,
-            value: FilterValue::Database,
+            value: FilterValue::DataSource,
         }
     }
 

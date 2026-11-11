@@ -1,0 +1,27 @@
+{
+  "object": "data_source",
+  "id": "projects-source",
+  "created_time": "2026-03-11T09:00:00.000Z",
+  "last_edited_time": "2026-03-11T10:00:00.000Z",
+  "title": [{ "type": "text", "text": { "content": "Projects" }, "plain_text": "Projects" }],
+  "icon": null,
+  "parent": { "type": "database_id", "database_id": "database-container" },
+  "database_parent": { "type": "page_id", "page_id": "parent-page" },
+  "in_trash": false,
+  "properties": {
+    "Name": { "id": "title", "type": "title", "title": {} },
+    "Tasks": {
+      "id": "tasks-relation",
+      "type": "relation",
+      "relation": {
+        "database_id": "database-container",
+        "data_source_id": "tasks-source",
+        "limit": null,
+        "type": "dual_property",
+        "dual_property": { "synced_property_name": "Projects", "synced_property_id": "projects-relation" }
+      }
+    }
+  },
+  "description": [],
+  "is_inline": false
+}

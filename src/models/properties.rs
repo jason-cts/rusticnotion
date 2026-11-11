@@ -1,7 +1,7 @@
 use crate::models::text::RichText;
 use crate::models::users::User;
 
-use crate::ids::{DatabaseId, PageId, PropertyId};
+use crate::ids::{DataSourceId, DatabaseId, PageId, PropertyId};
 use crate::models::{DateTime, Number, Utc};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -87,17 +87,35 @@ pub struct Formula {
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct Relation {
-    /// The database this relation refers to.
-    /// New linked pages must belong to this database in order to be valid.
-    pub database_id: DatabaseId,
-    /// By default, relations are formed as two synced properties across databases:
-    ///     if you make a change to one property, it updates the synced property at the same time.
-    /// `synced_property_name` refers to the name of the property in the related database.
+    /// The data source to which related pages must belong.
+    pub data_source_id: DataSourceId,
+    /// The containing database, returned for convenience but not sent in requests.
+    #[serde(skip_serializing)]
+    pub database_id: Option<DatabaseId>,
+    #[serde(flatten)]
+    pub kind: RelationType,
+}
+
+/// Whether a relation is one-way or has a synced property in the target data source.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RelationType {
+    SingleProperty {
+        single_property: SinglePropertyRelation,
+    },
+    DualProperty {
+        dual_property: DualPropertyRelation,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone, Default)]
+pub struct SinglePropertyRelation {}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone, Default)]
+pub struct DualPropertyRelation {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub synced_property_name: Option<String>,
-    /// By default, relations are formed as two synced properties across databases:
-    ///     if you make a change to one property, it updates the synced property at the same time.
-    /// `synced_property_id` refers to the id of the property in the related database.
-    /// This is usually a short string of random letters and symbols.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub synced_property_id: Option<PropertyId>,
 }
 

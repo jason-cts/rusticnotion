@@ -15,6 +15,8 @@ pub struct BlockCommon {
     pub created_time: DateTime<Utc>,
     pub last_edited_time: DateTime<Utc>,
     pub has_children: bool,
+    /// Whether this block is in the trash.
+    pub in_trash: bool,
     pub created_by: UserCommon,
     pub last_edited_by: UserCommon,
 }

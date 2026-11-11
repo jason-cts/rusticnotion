@@ -20,6 +20,7 @@ fn heading_1() {
                 created_time: DateTime::from_str("2022-05-12T21:15:00.000Z").unwrap(),
                 last_edited_time: DateTime::from_str("2022-05-12T22:10:00.000Z").unwrap(),
                 has_children: false,
+                in_trash: false,
                 created_by: UserCommon {
                     id: UserId::from_str("6419f912-5293-4ea8-b2c8-9c3ce44f90e3").unwrap(),
                     name: None,
@@ -261,6 +262,7 @@ fn callout() {
                     created_time: DateTime::from_str("2022-05-13T20:08:00.000Z").unwrap(),
                     last_edited_time: DateTime::from_str("2022-05-13T20:08:00.000Z").unwrap(),
                     has_children: true,
+                    in_trash: false,
                     created_by: UserCommon {
                         id: UserId::from_str("e2507360-468c-4e0f-a928-7bbcbbb45353").unwrap(),
                         name: None,

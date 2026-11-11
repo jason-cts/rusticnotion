@@ -11,7 +11,7 @@ async fn api_headers_search_pagination_and_encoded_child_cursor() {
     let server = MockServer::start().await;
     let api = NotionApi::with_base_url("test-token".into(), server.uri()).unwrap();
     Mock::given(method("POST")).and(path("/search"))
-        .and(header("Notion-Version", "2022-06-28"))
+        .and(header("Notion-Version", "2026-03-11"))
         .and(header("Authorization", "Bearer test-token"))
         .and(body_json(json!({"query":"Notes", "filter":{"property":"object","value":"page"},"start_cursor":"a&b?c+d"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"object":"list","results":[],"has_more":false,"next_cursor":null})))

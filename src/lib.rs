@@ -1,8 +1,8 @@
-use crate::ids::{BlockId, DatabaseId};
+use crate::ids::{BlockId, DataSourceId, DatabaseId};
 use crate::models::error::ErrorResponse;
 use crate::models::paging::PagingCursor;
-use crate::models::search::{DatabaseQuery, SearchRequest};
-use crate::models::{Database, ListResponse, Object, Page};
+use crate::models::search::{DataSourceQuery, SearchRequest};
+use crate::models::{DataSource, Database, ListResponse, Object, Page};
 use ids::{AsIdentifier, PageId};
 use models::block::Block;
 use models::search::NotionSearch;
@@ -18,7 +18,7 @@ pub mod models;
 
 pub use chrono;
 
-pub const NOTION_API_VERSION: &str = "2022-06-28";
+pub const NOTION_API_VERSION: &str = "2026-03-11";
 
 /// An wrapper Error type for all errors produced by the [`NotionApi`](NotionApi) client.
 #[derive(Debug, thiserror::Error)]
@@ -142,19 +142,16 @@ impl NotionApi {
         }
     }
 
-    /// List all the databases shared with the supplied integration token.
-    /// Because of the deprecation of the original endpoint this just calls
-    /// [search()](Self::search()) with a filter on databases
-    #[deprecated(
-        note = "This method is deprecated. Please use `search()` with a filter on databases instead."
-    )]
-    pub async fn list_databases(&self) -> Result<ListResponse<Database>, Error> {
-        self.search(NotionSearch::filter_by_databases())
+    /// Lists one page of data sources shared with the integration via search.
+    /// Use [search()](Self::search()) with a data source filter and a cursor
+    /// to retrieve subsequent pages.
+    pub async fn list_data_sources(&self) -> Result<ListResponse<DataSource>, Error> {
+        self.search(NotionSearch::filter_by_data_sources())
             .await
-            .map(|response| response.only_databases())
+            .map(|response| response.only_data_sources())
     }
 
-    /// Search all pages in notion.
+    /// Search pages and data sources by title.
     /// `query` can either be a [SearchRequest] or a slightly more convenient
     /// [NotionSearch](models::search::NotionSearch) query.
     pub async fn search<T: Into<SearchRequest>>(
@@ -175,7 +172,8 @@ impl NotionApi {
         }
     }
 
-    /// Get a database by [DatabaseId].
+    /// Gets a database container and its child data source IDs by [DatabaseId].
+    /// Use [get_data_source()](Self::get_data_source()) to retrieve a schema.
     pub async fn get_database<T: AsIdentifier<DatabaseId>>(
         &self,
         database_id: T,
@@ -190,6 +188,25 @@ impl NotionApi {
 
         match result {
             Object::Database { database } => Ok(database),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Gets a data source, including its property schema, by [DataSourceId].
+    pub async fn get_data_source<T: AsIdentifier<DataSourceId>>(
+        &self,
+        data_source_id: T,
+    ) -> Result<DataSource, Error> {
+        let result = self
+            .make_json_request(self.client.get(format!(
+                "{}/data_sources/{}",
+                self.base_url,
+                data_source_id.as_id()
+            )))
+            .await?;
+
+        match result {
+            Object::DataSource { data_source } => Ok(data_source),
             response => Err(Error::UnexpectedResponse { response }),
         }
     }
@@ -232,25 +249,36 @@ impl NotionApi {
         }
     }
 
-    /// Query a database and return the matching pages.
-    pub async fn query_database<D, T>(
+    /// Queries a specific data source and returns one page of matching pages.
+    /// Sets `result_type: "page"` so wiki data source results are excluded.
+    pub async fn query_data_source<D, T>(
         &self,
-        database: D,
+        data_source: D,
         query: T,
     ) -> Result<ListResponse<Page>, Error>
     where
-        T: Into<DatabaseQuery>,
-        D: AsIdentifier<DatabaseId>,
+        T: Into<DataSourceQuery>,
+        D: AsIdentifier<DataSourceId>,
     {
+        #[derive(serde::Serialize)]
+        struct PageQuery {
+            #[serde(flatten)]
+            query: DataSourceQuery,
+            result_type: &'static str,
+        }
+
         let result = self
             .make_json_request(
                 self.client
-                    .post(&format!(
-                        "{}/databases/{database_id}/query",
+                    .post(format!(
+                        "{}/data_sources/{data_source_id}/query",
                         self.base_url,
-                        database_id = database.as_id()
+                        data_source_id = data_source.as_id()
                     ))
-                    .json(&query.into()),
+                    .json(&PageQuery {
+                        query: query.into(),
+                        result_type: "page",
+                    }),
             )
             .await?;
         match result {
@@ -337,3 +365,6 @@ impl NotionApi {
 
 #[cfg(test)]
 mod compatibility_tests;
+
+#[cfg(test)]
+mod api_version_tests;

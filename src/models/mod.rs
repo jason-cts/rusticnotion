@@ -13,7 +13,7 @@ use block::FileOrEmojiObject;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::ids::{AsIdentifier, BlockId, DatabaseId, PageId};
+use crate::ids::{AsIdentifier, BlockId, DataSourceId, DatabaseId, PageId};
 use crate::models::block::{Block, CreateBlock};
 use crate::models::error::ErrorResponse;
 use crate::models::paging::PagingCursor;
@@ -28,7 +28,7 @@ enum ObjectType {
     List,
 }
 
-/// Represents a Notion Database
+/// A database container. Property schemas belong to its child data sources.
 /// See <https://developers.notion.com/reference/database>
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub struct Database {
@@ -41,14 +41,48 @@ pub struct Database {
     /// Name of the database as it appears in Notion.
     pub title: Vec<RichText>,
     pub icon: Option<FileOrEmojiObject>,
-    /// Schema of properties for the database as they appear in Notion.
-    //
-    // key string
-    // The name of the property as it appears in Notion.
-    //
-    // value object
-    // A Property object.
+    pub parent: Parent,
+    pub in_trash: bool,
+    pub data_sources: Vec<DataSourceReference>,
+}
+
+/// An entry in a database's `data_sources` array, not a complete schema.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct DataSourceReference {
+    pub id: DataSourceId,
+    pub name: String,
+}
+
+impl AsIdentifier<DataSourceId> for DataSourceReference {
+    fn as_id(&self) -> &DataSourceId {
+        &self.id
+    }
+}
+
+/// A table within a database, with its own property schema and pages.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct DataSource {
+    pub id: DataSourceId,
+    pub created_time: DateTime<Utc>,
+    pub last_edited_time: DateTime<Utc>,
+    pub title: Vec<RichText>,
+    pub icon: Option<FileOrEmojiObject>,
+    pub parent: Parent,
+    pub database_parent: Parent,
+    pub in_trash: bool,
     pub properties: HashMap<String, PropertyConfiguration>,
+}
+
+impl AsIdentifier<DataSourceId> for DataSource {
+    fn as_id(&self) -> &DataSourceId {
+        &self.id
+    }
+}
+
+impl DataSource {
+    pub fn title_plain_text(&self) -> String {
+        self.title.iter().map(|text| text.plain_text()).collect()
+    }
 }
 
 impl AsIdentifier<DatabaseId> for Database {
@@ -81,6 +115,23 @@ impl<T> ListResponse<T> {
 }
 
 impl ListResponse<Object> {
+    pub fn only_data_sources(self) -> ListResponse<DataSource> {
+        let data_sources = self
+            .results
+            .into_iter()
+            .filter_map(|object| match object {
+                Object::DataSource { data_source } => Some(data_source),
+                _ => None,
+            })
+            .collect();
+
+        ListResponse {
+            results: data_sources,
+            has_more: self.has_more,
+            next_cursor: self.next_cursor,
+        }
+    }
+
     pub fn only_databases(self) -> ListResponse<Database> {
         let databases = self
             .results
@@ -137,6 +188,12 @@ impl ListResponse<Object> {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum Parent {
+    /// Use this parent when creating a page inside a data source.
+    /// The API's additional response-only `database_id` is ignored.
+    #[serde(rename = "data_source_id")]
+    DataSource {
+        data_source_id: DataSourceId,
+    },
     #[serde(rename = "database_id")]
     Database {
         database_id: DatabaseId,
@@ -184,8 +241,8 @@ pub struct Page {
     pub created_time: DateTime<Utc>,
     /// Date and time when this page was updated.
     pub last_edited_time: DateTime<Utc>,
-    /// The archived status of the page.
-    pub archived: bool,
+    /// Whether this page is in the trash.
+    pub in_trash: bool,
     pub icon: Option<FileOrEmojiObject>,
     pub properties: Properties,
     pub parent: Parent,
@@ -215,6 +272,10 @@ pub enum Object {
         #[serde(flatten)]
         database: Database,
     },
+    DataSource {
+        #[serde(flatten)]
+        data_source: DataSource,
+    },
     Page {
         #[serde(flatten)]
         page: Page,
@@ -234,6 +295,10 @@ pub enum Object {
 }
 
 impl Object {
+    pub fn is_data_source(&self) -> bool {
+        matches!(self, Object::DataSource { .. })
+    }
+
     pub fn is_database(&self) -> bool {
         matches!(self, Object::Database { .. })
     }
