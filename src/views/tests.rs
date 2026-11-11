@@ -147,3 +147,48 @@ async fn partial_user_profiles_can_be_resolved_by_id() {
         .unwrap();
     assert_eq!(serde_json::to_value(user).unwrap()["name"], "Alice");
 }
+
+#[test]
+fn table_frozen_columns_accept_the_negative_one_sentinel() {
+    for (value, expected) in [
+        (json!(-1), Some(0)),
+        (json!(0), Some(0)),
+        (json!(2), Some(2)),
+        (json!(null), None),
+    ] {
+        let view: View = serde_json::from_value(json!({
+            "id": "table", "type": "table",
+            "configuration": {"type": "table", "frozen_column_index": value}
+        }))
+        .unwrap();
+        assert_eq!(view.configuration.unwrap().frozen_column_index, expected);
+    }
+    let config: ViewConfiguration = serde_json::from_value(json!({"type": "table"})).unwrap();
+    assert_eq!(config.frozen_column_index, None);
+    for invalid in [json!(-2), json!(1.5), json!("-1")] {
+        assert!(serde_json::from_value::<ViewConfiguration>(json!({
+            "type": "table", "frozen_column_index": invalid
+        }))
+        .is_err());
+    }
+}
+
+#[tokio::test]
+async fn retrieves_table_views_without_frozen_columns() {
+    let server = MockServer::start().await;
+    let api = NotionApi::with_base_url("test".into(), server.uri()).unwrap();
+    Mock::given(method("GET"))
+        .and(path("/views/table"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "id": "table", "type": "table", "data_source_id": "source",
+            "configuration": {"type": "table", "frozen_column_index": -1}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let view = api
+        .get_view("table".parse::<ViewId>().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(view.configuration.unwrap().frozen_column_index, Some(0));
+}

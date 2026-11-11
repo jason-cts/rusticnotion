@@ -4,6 +4,7 @@ use crate::ids::{DataSourceId, PageId, ViewId, ViewQueryId};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ViewReference {
@@ -43,6 +44,8 @@ pub struct ViewConfiguration {
     pub group_by: Option<GroupBy>,
     pub sub_group_by: Option<GroupBy>,
     pub wrap_cells: Option<bool>,
+    /// Number of frozen columns. API responses using -1 are normalized to zero.
+    #[serde(default, deserialize_with = "deserialize_frozen_column_index")]
     pub frozen_column_index: Option<usize>,
     pub show_vertical_lines: Option<bool>,
     #[serde(flatten)]
@@ -118,4 +121,21 @@ pub struct ViewQueryResults {
 pub struct DeletedViewQuery {
     pub id: ViewQueryId,
     pub deleted: bool,
+}
+
+// Some saved table views return -1 for no frozen columns, even though the
+// documented configuration uses a nonnegative count. Preserve the public type.
+fn deserialize_frozen_column_index<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<i64>::deserialize(deserializer)?
+        .map(|index| {
+            if index == -1 {
+                Ok(0)
+            } else {
+                usize::try_from(index).map_err(serde::de::Error::custom)
+            }
+        })
+        .transpose()
 }
