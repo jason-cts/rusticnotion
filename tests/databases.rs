@@ -2,7 +2,7 @@ use test_log::test;
 mod common;
 use common::test_client;
 use rusticnotion::models::{
-    block::FileOrEmojiObject,
+    properties::PropertyConfiguration,
     search::{
         DatabaseQuery, FilterCondition, FilterProperty, FilterValue, NotionSearch,
         PropertyCondition, TextCondition,
@@ -32,8 +32,7 @@ async fn get_database() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Test expected to find at least one database in notion")
         .clone();
 
-    // todo: fix this clone issue
-    let db_result = api.get_database(db.clone()).await?;
+    let db_result = api.get_database(&db.id).await?;
 
     assert_eq!(db, db_result);
 
@@ -62,21 +61,56 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
         .expect("Test expected to find at least one database in notion")
         .clone();
 
-    assert_eq!(
-        db.icon,
-        Some(FileOrEmojiObject::Emoji {
-            emoji: "🪑".to_string(),
+    let title_property = db
+        .properties
+        .iter()
+        .find_map(|(name, property)| match property {
+            PropertyConfiguration::Title { .. } => Some(name.clone()),
+            _ => None,
         })
-    );
+        .expect("Test database must have a title property");
+
+    let all_pages = api.query_database(&db.id, DatabaseQuery::default()).await?;
+    let (page_id, title) = all_pages
+        .results()
+        .iter()
+        .find_map(|page| {
+            page.properties
+                .title()
+                .filter(|title| !title.is_empty())
+                .map(|title| (page.id.clone(), title))
+        })
+        .expect("Test database must contain at least one page with a nonempty title");
 
     let pages = api
         .query_database(
-            db.clone(),
+            &db.id,
             DatabaseQuery {
                 filter: Some(FilterCondition::Property {
-                    property: "Name".to_string(),
-                    condition: PropertyCondition::RichText(TextCondition::Contains(
-                        "First".to_string(),
+                    property: title_property.clone(),
+                    condition: PropertyCondition::RichText(TextCondition::Contains(title.clone())),
+                }),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    assert!(
+        pages.results().iter().any(|page| page.id == page_id),
+        "Title filter must include the known matching page"
+    );
+    for page in pages.results() {
+        assert!(page.properties.title().unwrap().contains(&title));
+    }
+
+    let excluded_pages = api
+        .query_database(
+            &db.id,
+            DatabaseQuery {
+                filter: Some(FilterCondition::Property {
+                    property: title_property,
+                    condition: PropertyCondition::RichText(TextCondition::DoesNotContain(
+                        title.clone(),
                     )),
                 }),
                 ..Default::default()
@@ -84,18 +118,9 @@ async fn query_database() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    assert_eq!(pages.results().len(), 1);
-    assert_eq!(
-        pages.results()[0].icon,
-        Some(FileOrEmojiObject::Emoji {
-            emoji: "🌋".to_string(),
-        })
-    );
-
-    let pages = api.query_database(db, DatabaseQuery::default()).await?;
-
-    for page in pages.results() {
-        assert!(page.icon.is_some());
+    for page in excluded_pages.results() {
+        assert_ne!(page.id, page_id);
+        assert!(!page.properties.title().unwrap().contains(&title));
     }
 
     Ok(())

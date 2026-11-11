@@ -51,12 +51,20 @@ pub struct CustomEmojiObject {
     pub url: String,
 }
 
+/// A built-in Notion icon, returned even when using older API versions.
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct NativeIconObject {
+    pub name: String,
+    pub color: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum FileOrEmojiObject {
     Emoji { emoji: String },
     CustomEmoji { custom_emoji: CustomEmojiObject },
+    Icon { icon: NativeIconObject },
     File { file: InternalFileObject },
     External { external: ExternalFileObject },
 }

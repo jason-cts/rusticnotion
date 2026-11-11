@@ -44,6 +44,12 @@ You can also create your own token [here](https://www.notion.so/my-integrations)
 
 NOTE: While making the integration tests more useful, the template will probably change a lot.
 
+The read-only integration tests also work with your own workspace. Share at least
+one page and one database with the integration, and ensure the first database
+returned by search contains a page with a nonempty title. The query tests use
+that database's title property and page titles; they do not require specific
+names or icons.
+
 ```bash
 # Run all tests
 cargo test

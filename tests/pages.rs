@@ -20,14 +20,14 @@ async fn get_block_children() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
 
-    println!("{:?}", search_response.results.len());
+    assert!(
+        !search_response.results.is_empty(),
+        "Test expected to find at least one page in notion"
+    );
 
     for object in search_response.results {
         match object {
-            Object::Page { page } => api
-                .get_block_children(BlockId::from(page.id))
-                .await
-                .unwrap(),
+            Object::Page { page } => api.get_block_children(BlockId::from(page.id), None).await?,
             _ => panic!("Should not have received anything but pages!"),
         };
     }

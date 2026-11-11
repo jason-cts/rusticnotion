@@ -200,7 +200,11 @@ fn verification_properties_decode_null_and_populated_values() {
     ] {
         let property = json!({"id":"vrfy","type":"verification","verification":verification});
         let decoded: PropertyValue = serde_json::from_value(property).unwrap();
-        if let PropertyValue::Verification { verification: value, .. } = &decoded {
+        if let PropertyValue::Verification {
+            verification: value,
+            ..
+        } = &decoded
+        {
             assert_eq!(value.is_none(), verification.is_null());
             if let Some(value) = value {
                 assert_eq!(value.state, verification["state"].as_str().unwrap());

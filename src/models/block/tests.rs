@@ -214,6 +214,16 @@ fn emoji_object() {
 }
 
 #[test]
+fn native_icon_round_trips() {
+    let value = serde_json::json!({
+        "type": "icon",
+        "icon": {"name": "user-circle", "color": "gray"}
+    });
+    let icon: FileOrEmojiObject = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(icon).unwrap(), value);
+}
+
+#[test]
 fn file_object() {
     let file_object: FileOrEmojiObject =
         serde_json::from_str(include_str!("tests/file_object.json")).unwrap();
