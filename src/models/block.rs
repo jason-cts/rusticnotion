@@ -380,6 +380,11 @@ pub enum Block {
         common: BlockCommon,
         file: FileFields,
     },
+    Audio {
+        #[serde(flatten)]
+        common: BlockCommon,
+        audio: FileFields,
+    },
     Pdf {
         #[serde(flatten)]
         common: BlockCommon,
@@ -477,6 +482,7 @@ impl Block {
             | Image { common, .. }
             | Video { common, .. }
             | File { common, .. }
+            | Audio { common, .. }
             | Pdf { common, .. }
             | Bookmark { common, .. }
             | Equation { common, .. }
@@ -560,6 +566,7 @@ impl AsIdentifier<BlockId> for Block {
             | Image { common, .. }
             | Video { common, .. }
             | File { common, .. }
+            | Audio { common, .. }
             | Pdf { common, .. }
             | Bookmark { common, .. }
             | Equation { common, .. }
@@ -608,6 +615,7 @@ impl From<Block> for CreateBlock {
             Block::Image { image, .. } => CreateBlock::Image { image },
             Block::Video { video, .. } => CreateBlock::Video { video },
             Block::File { file, .. } => CreateBlock::File { file },
+            Block::Audio { audio, .. } => CreateBlock::Audio { audio },
             Block::Pdf { pdf, .. } => CreateBlock::Pdf { pdf },
             Block::Bookmark { bookmark, .. } => CreateBlock::Bookmark { bookmark },
             Block::Equation { equation, .. } => CreateBlock::Equation { equation },
@@ -688,6 +696,9 @@ pub enum CreateBlock {
     },
     File {
         file: FileFields,
+    },
+    Audio {
+        audio: FileFields,
     },
     Pdf {
         pdf: FileObject,

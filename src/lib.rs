@@ -3,8 +3,11 @@ use crate::models::error::ErrorResponse;
 use crate::models::paging::PagingCursor;
 use crate::models::search::{DataSourceQuery, SearchRequest};
 use crate::models::{DataSource, Database, ListResponse, Object, Page};
-use ids::{AsIdentifier, PageId};
+use ids::{AsIdentifier, Identifier, PageId, PropertyId};
 use models::block::Block;
+use models::paging::Paging;
+use models::property_item::PagePropertyResponse;
+use models::requests::*;
 use models::search::NotionSearch;
 use models::PageCreateRequest;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -99,6 +102,13 @@ impl NotionApi {
         &self,
         request: RequestBuilder,
     ) -> Result<Object, Error> {
+        self.make_request(request).await
+    }
+
+    async fn make_request<T: serde::de::DeserializeOwned>(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<T, Error> {
         let request = request.build()?;
         let url = request.url();
         tracing::trace!(
@@ -133,13 +143,14 @@ impl NotionApi {
             dbg!(serde_json::from_str::<serde_json::Value>(&json)
                 .map_err(|source| Error::JsonParseError { source })?);
         }
-        let result =
+        let value: serde_json::Value =
             serde_json::from_str(&json).map_err(|source| Error::JsonParseError { source })?;
-
-        match result {
-            Object::Error { error } => Err(Error::ApiError { error }),
-            response => Ok(response),
+        if value.get("object").and_then(serde_json::Value::as_str) == Some("error") {
+            let error =
+                serde_json::from_value(value).map_err(|source| Error::JsonParseError { source })?;
+            return Err(Error::ApiError { error });
         }
+        serde_json::from_value(value).map_err(|source| Error::JsonParseError { source })
     }
 
     /// Lists one page of data sources shared with the integration via search.
@@ -361,6 +372,201 @@ impl NotionApi {
             response => Err(Error::UnexpectedResponse { response }),
         }
     }
+
+    /// Retrieves one property value or one page of property items (including rollup metadata).
+    /// IDs may be raw or URL-encoded; they are encoded as a single path segment.
+    /// Continue lists with `list.next_cursor` until `list.has_more` is false.
+    pub async fn get_page_property<P, R>(
+        &self,
+        page_id: P,
+        property_id: R,
+        paging: Paging,
+    ) -> Result<PagePropertyResponse, Error>
+    where
+        P: AsIdentifier<PageId>,
+        R: AsIdentifier<PropertyId>,
+    {
+        let decoded =
+            percent_encoding::percent_decode_str(property_id.as_id().value()).decode_utf8_lossy();
+        let encoded =
+            percent_encoding::utf8_percent_encode(&decoded, percent_encoding::NON_ALPHANUMERIC);
+        self.make_request(
+            self.client
+                .get(format!(
+                    "{}/pages/{}/properties/{}",
+                    self.base_url,
+                    page_id.as_id(),
+                    encoded
+                ))
+                .query(&paging),
+        )
+        .await
+    }
+
+    /// Updates page values, icon/cover, lock state, or trash state.
+    /// Omitted fields are unchanged; nullable fields can be explicitly cleared.
+    pub async fn update_page<P: AsIdentifier<PageId>>(
+        &self,
+        page_id: P,
+        update: PageUpdateRequest,
+    ) -> Result<Page, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .patch(format!("{}/pages/{}", self.base_url, page_id.as_id()))
+                    .json(&update),
+            )
+            .await?;
+        match result {
+            Object::Page { page } => Ok(page),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Appends up to 100 children in one request. Uses the 2026 `position` shape.
+    /// Returns the newly created first-level blocks. Requests are not split or retried.
+    pub async fn append_block_children<B: AsIdentifier<BlockId>>(
+        &self,
+        block_id: B,
+        append: BlockAppendRequest,
+    ) -> Result<ListResponse<Block>, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .patch(format!(
+                        "{}/blocks/{}/children",
+                        self.base_url,
+                        block_id.as_id()
+                    ))
+                    .json(&append),
+            )
+            .await?;
+        match result {
+            Object::List { list } => list.expect_blocks(),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Patches block content or trash state. Children must be appended separately.
+    pub async fn update_block<B: AsIdentifier<BlockId>>(
+        &self,
+        block_id: B,
+        update: BlockUpdateRequest,
+    ) -> Result<Block, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .patch(format!("{}/blocks/{}", self.base_url, block_id.as_id()))
+                    .json(&update),
+            )
+            .await?;
+        match result {
+            Object::Block { block } => Ok(block),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Moves a block to the trash and returns it. This is not permanent deletion.
+    /// Restore with `update_block` and `in_trash: Some(false)`.
+    pub async fn delete_block<B: AsIdentifier<BlockId>>(
+        &self,
+        block_id: B,
+    ) -> Result<Block, Error> {
+        let result = self
+            .make_json_request(self.client.delete(format!(
+                "{}/blocks/{}",
+                self.base_url,
+                block_id.as_id()
+            )))
+            .await?;
+        match result {
+            Object::Block { block } => Ok(block),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Creates a container and its initial data source. Schemas go under `initial_data_source`.
+    pub async fn create_database(
+        &self,
+        create: DatabaseCreateRequest,
+    ) -> Result<Database, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .post(format!("{}/databases", self.base_url))
+                    .json(&create),
+            )
+            .await?;
+        match result {
+            Object::Database { database } => Ok(database),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Updates container metadata. Use `update_data_source` to change property schemas.
+    pub async fn update_database<D: AsIdentifier<DatabaseId>>(
+        &self,
+        database_id: D,
+        update: DatabaseUpdateRequest,
+    ) -> Result<Database, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .patch(format!(
+                        "{}/databases/{}",
+                        self.base_url,
+                        database_id.as_id()
+                    ))
+                    .json(&update),
+            )
+            .await?;
+        match result {
+            Object::Database { database } => Ok(database),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Creates another data source inside an existing database container.
+    pub async fn create_data_source(
+        &self,
+        create: DataSourceCreateRequest,
+    ) -> Result<DataSource, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .post(format!("{}/data_sources", self.base_url))
+                    .json(&create),
+            )
+            .await?;
+        match result {
+            Object::DataSource { data_source } => Ok(data_source),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
+
+    /// Updates a data source's title, icon, schema, parent database, or trash state.
+    /// In `properties`, null removes a column; a partial definition can rename it.
+    pub async fn update_data_source<D: AsIdentifier<DataSourceId>>(
+        &self,
+        data_source_id: D,
+        update: DataSourceUpdateRequest,
+    ) -> Result<DataSource, Error> {
+        let result = self
+            .make_json_request(
+                self.client
+                    .patch(format!(
+                        "{}/data_sources/{}",
+                        self.base_url,
+                        data_source_id.as_id()
+                    ))
+                    .json(&update),
+            )
+            .await?;
+        match result {
+            Object::DataSource { data_source } => Ok(data_source),
+            response => Err(Error::UnexpectedResponse { response }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -368,3 +574,6 @@ mod compatibility_tests;
 
 #[cfg(test)]
 mod api_version_tests;
+
+#[cfg(test)]
+mod core_api_tests;

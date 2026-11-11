@@ -2,6 +2,8 @@ pub mod block;
 pub mod error;
 pub mod paging;
 pub mod properties;
+pub mod property_item;
+pub mod requests;
 pub mod search;
 pub mod text;
 pub mod users;
@@ -41,6 +43,11 @@ pub struct Database {
     /// Name of the database as it appears in Notion.
     pub title: Vec<RichText>,
     pub icon: Option<FileOrEmojiObject>,
+    pub cover: Option<block::FileObject>,
+    #[serde(default)]
+    pub description: Vec<RichText>,
+    pub is_inline: Option<bool>,
+    pub is_locked: Option<bool>,
     pub parent: Parent,
     pub in_trash: bool,
     pub data_sources: Vec<DataSourceReference>,
@@ -244,6 +251,8 @@ pub struct Page {
     /// Whether this page is in the trash.
     pub in_trash: bool,
     pub icon: Option<FileOrEmojiObject>,
+    pub cover: Option<block::FileObject>,
+    pub is_locked: Option<bool>,
     pub properties: Properties,
     pub parent: Parent,
 }

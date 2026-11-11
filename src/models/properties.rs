@@ -280,6 +280,21 @@ pub enum PropertyConfiguration {
     Verification {
         id: PropertyId,
     },
+    UniqueId {
+        id: PropertyId,
+        unique_id: UniqueIdConfiguration,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct UniqueIdConfiguration {
+    pub prefix: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
+pub struct UniqueIdValue {
+    pub prefix: Option<String>,
+    pub number: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
@@ -320,10 +335,21 @@ pub struct VerificationValue {
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum FormulaResultValue {
-    String { string: Option<String> },
-    Number { number: Option<Number> },
-    Boolean { boolean: Option<bool> },
-    Date { date: Option<DateValue> },
+    String {
+        string: Option<String>,
+    },
+    Number {
+        number: Option<Number>,
+    },
+    Boolean {
+        boolean: Option<bool>,
+    },
+    Date {
+        date: Option<DateValue>,
+    },
+    Unsupported {
+        unsupported: super::requests::EmptyObject,
+    },
 }
 
 /// Relation property value objects contain an array of page references within the relation property.
@@ -474,6 +500,10 @@ pub enum PropertyValue {
     Verification {
         id: PropertyId,
         verification: Option<VerificationValue>,
+    },
+    UniqueId {
+        id: PropertyId,
+        unique_id: UniqueIdValue,
     },
 }
 
