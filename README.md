@@ -28,6 +28,47 @@ Once Version 0.7.0 is released, we will publish the library to crates.io.
 rusticnotion = "0.7.0"
 ```
 
+## Comments
+
+`NotionApi` provides `list_comments(block_id, paging)`, `get_comment(comment_id)`,
+`create_comment(request)`, `update_comment(comment_id, request)`, and
+`delete_comment(comment_id)`. IDs use `BlockId`, `CommentId`, and `DiscussionId`.
+List requests return one page of unresolved comments; pass `next_cursor` as
+`Paging::start_cursor` for the next page. Convert page IDs with `BlockId::from`.
+
+```rust
+use rusticnotion::{
+    ids::BlockId,
+    models::{comment::CommentCreateRequest, paging::Paging},
+    Error, NotionApi,
+};
+
+async fn comment_on_block(api: &NotionApi, block: BlockId) -> Result<(), Error> {
+    let created = api.create_comment(CommentCreateRequest::on_block(
+        block.clone(), vec!["Hello from Rust".into()],
+    )).await?;
+    let comments = api.list_comments(block, Paging::default()).await?;
+    // CommentCreateRequest::on_page(...) comments on a page;
+    // CommentCreateRequest::reply(...) replies to an existing discussion.
+    println!("Created {}; retrieved {} comments", created.id, comments.results.len());
+    Ok(())
+}
+```
+
+Comment models and write requests are in `models::comment`. `Comment` preserves
+rich-text runs, attachments, and unknown response fields as JSON, including
+mentions and equations. Writes return `CommentReference`, retaining the ID and
+any additional response fields, since Notion may return only an ID without
+read-comment capability. Request bodies use `RichTextInput`, omitting server-owned
+fields and allowing exactly one create target.
+
+Enable read/insert comment capabilities on the connection. Permissions are
+enforced by Notion; deleting is limited to comments created by that connection.
+Errors use the shared `Error` enum, including `RateLimited { retry_after_secs }`.
+The client does not retry writes or implement application-specific conflict
+checks, draft recovery, or UI state. Uploading attachments, resolving discussions,
+and anchoring new comments to text ranges are not implemented.
+
 ## Migrating from 2022-06-28 to 2026-03-11
 
 The migration includes the database/data source split introduced in

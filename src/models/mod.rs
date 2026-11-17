@@ -1,4 +1,5 @@
 pub mod block;
+pub mod comment;
 pub mod error;
 pub mod paging;
 pub mod properties;

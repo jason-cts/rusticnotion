@@ -16,6 +16,7 @@ use std::boxed::Box;
 use std::option::Option;
 use tracing::Instrument;
 
+mod comments;
 pub mod ids;
 pub mod models;
 mod views;

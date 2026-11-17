@@ -65,6 +65,8 @@ identifer!(DatabaseId);
 identifer!(DataSourceId);
 identifer!(PageId);
 identifer!(BlockId);
+identifer!(CommentId);
+identifer!(DiscussionId);
 identifer!(UserId);
 identifer!(PropertyId);
 
